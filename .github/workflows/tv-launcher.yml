@@ -1,0 +1,42 @@
+name: tv-launcher
+# Builds the cleanyourtv home-screen launcher APK for the living-room TV and publishes it as a
+# prerelease, so it can be downloaded on a phone and installed over ADB from Termux.
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - claude/cleanyourtv-project-aixnas
+    paths:
+      - .github/workflows/tv-launcher.yml
+permissions:
+  contents: write
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    env:
+      CLEANYOURTV_REF: 3ece7766ad5d6af79a2c4dd73e77b4b9623dfeca
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          repository: Gathin23/cleanyourtv
+          ref: ${{ env.CLEANYOURTV_REF }}
+          path: cleanyourtv
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - name: Build
+        working-directory: cleanyourtv/launcher
+        run: |
+          echo "sdk.dir=$ANDROID_HOME" > local.properties
+          ./gradlew assembleRelease --console=plain
+          cp app/build/outputs/apk/release/app-release.apk "$GITHUB_WORKSPACE/tvhome.apk"
+          cd "$GITHUB_WORKSPACE" && sha256sum tvhome.apk | tee tvhome.apk.sha256
+      - name: Publish
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release create "tv-launcher-${{ github.run_number }}" tvhome.apk tvhome.apk.sha256 \
+            --repo "${{ github.repository }}" --target "${{ github.sha }}" --prerelease \
+            --title "TV launcher build ${{ github.run_number }}" \
+            --notes "cleanyourtv launcher built from Gathin23/cleanyourtv@${{ env.CLEANYOURTV_REF }}"
